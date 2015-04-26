@@ -8,6 +8,8 @@ var parseImports = require('./parse-imports');
 
 // resolve a sass module to a path
 function resolveSassPath(sassPath, loadPaths) {
+  var paths = [];
+
   // trim sass file extensions
   var sassPathName = sassPath.replace(/\.(css|s[ca]ss)$/, '');
   // check all load paths
@@ -18,7 +20,7 @@ function resolveSassPath(sassPath, loadPaths) {
     for (var j = 0; j < extensions.length; j++) {
       scssPath = path.normalize(loadPaths[i] + "/" + sassPathName + extensions[j]);
       if (fs.existsSync(scssPath)) {
-        return scssPath;
+        paths.push(scssPath);
       }
     }
 
@@ -29,9 +31,13 @@ function resolveSassPath(sassPath, loadPaths) {
       scssPath = path.normalize(loadPaths[i] + "/" + sassPathName + extensions[j]);
       partialPath = path.join(path.dirname(scssPath), "_" + path.basename(scssPath));
       if (fs.existsSync(partialPath)) {
-        return partialPath;
+        paths.push(partialPath);
       }
     }
+  }
+
+  if (paths.length) {
+    return paths;
   }
 
   // File to import not found or unreadable so we assume this is a custom import
@@ -70,14 +76,16 @@ Graph.prototype.addFile = function(filepath, parent) {
         this.loadPaths.push(path);
       }
     }.bind(this));
-    var resolved = resolveSassPath(imports[i], _.uniq(this.loadPaths));
-    if (!resolved) continue;
+    var resolvedPaths = resolveSassPath(imports[i], _.uniq(this.loadPaths));
+    if (!resolvedPaths) continue;
 
-    // recurse into dependencies if not already enumerated
-    if(!_.contains(entry.imports, resolved)) {
-      entry.imports.push(resolved);
-      this.addFile(fs.realpathSync(resolved), filepath);
-    }
+    resolvedPaths.forEach(function(resolvedPath) {
+      // recurse into dependencies if not already enumerated
+      if(!_.contains(entry.imports, resolvedPath)) {
+        entry.imports.push(resolvedPath);
+        this.addFile(fs.realpathSync(resolvedPath), filepath);
+      }
+    }.bind(this));
   }
 
   // add link back to parent
